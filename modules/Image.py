@@ -1,1 +1,3 @@
-from abc import ABC
+from ImageBase import ImageBase
+class Image(ImageBase):
+    pass
