@@ -1,5 +1,12 @@
 from abc import ABC, abstractmethod
 
 class ImageBase(ABC):
-    pass
+    @abstractmethod
+    def loadFromPath():
+        pass
+    @abstractmethod
+    def loadFromByte():
+        pass
+    def loadFromURL():
+        pass
     
