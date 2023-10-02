@@ -57,7 +57,7 @@ if args.front.split(".")[-1].lower() == 'mp4':
 else:
     frontLayerImage = StaticImage(args.front)
 if args.sound == None:
-    p = Popen(['ffmpeg', '-y', '-f', 'image2pipe', '-i', '-', '-vcodec', 'libx264', '-qscale', '5','-b','1000k', '-r', '30','-pix_fmt', 'yuv420p', args.output], stdin=PIPE)
+    p = Popen(['ffmpeg', '-y', '-f', 'image2pipe', '-i', '-', '-vcodec', 'libx264', '-qscale', '5','-b','1000k', '-r', '120','-pix_fmt', 'yuv420p', args.output], stdin=PIPE)
 elif args.soundLoop:
     p = Popen(['ffmpeg', '-y', '-f', 'image2pipe', '-i', '-','-stream_loop', '-1', '-i', args.sound, '-shortest', '-acodec', 'aac', '-vcodec', 'libx264', '-qscale', '5','-b','1000k', '-r', '30','-pix_fmt', 'yuv420p', args.output], stdin=PIPE)
 else:
