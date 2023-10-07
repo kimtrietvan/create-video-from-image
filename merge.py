@@ -1,24 +1,56 @@
 from PIL import Image
 import glob
+import requests
 import numpy as np
 from subprocess import Popen, PIPE
 from lib.Image import StaticImage, DynamicImage
 import argparse
 import os
+import io
+import ffmpeg
+import uuid
+
+def speed_up_video(input_video, output_duration, output):
+    # Đọc thông số video gốc
+    probe = ffmpeg.probe(input_video)
+    video_stream = next((stream for stream in probe['streams'] if stream['codec_type'] == 'video'), None)
+    fps_values = video_stream['r_frame_rate'].split('/') 
+    numerator = float(fps_values[0])
+    denominator = float(fps_values[1])
+    fps = numerator / denominator
+    duration = float(video_stream['duration'])
+    print(duration)
+    print(fps)
+    # Tính fps cần
+    new_fps = int(fps * (duration / output_duration))
+    print(new_fps)
+    # Rút ngắn video
+    ffmpeg.input(input_video).output(
+        output, 
+        # preset='ultrafast',
+        # crf=18, 
+        vf=f'setpts=PTS * {fps / new_fps}',
+        # strict='experimental'
+    ).run()
+    os.remove(input_video)
+    
+# Gọi hàm
+
 argParser = argparse.ArgumentParser()
-argParser.add_argument("-i", "--images", help="Your images folder")
+argParser.add_argument("-i", "--images", help="Your images url list")
 argParser.add_argument("-f", "--front", help="Your front layer")
 argParser.add_argument("-b", "--back", help="Your back layer")
 argParser.add_argument('-o', '--output', help="Video output")
 argParser.add_argument('-s', '--sound', help="Sound data", required=False, default=None)
 argParser.add_argument('-sl', '--soundLoop', help="Sound loop or not", required=False, default=False, type=bool)
-
-
-
 args = argParser.parse_args()
 
+image_url = []
+with open(args.images) as f:
+    for line in f:
+        image_url.append(line.split("\n")[0])
 
-images = [Image.open(path).convert("RGBA") for path in sorted(glob.glob(os.path.join(args.images,'*')))]
+images = [Image.open(io.BytesIO(requests.get(path).content)).convert("RGBA") for path in image_url]
 # print(os.environ['average_height'])
 max_width = sum(np.array(image).shape[1] for image in images)
 max_height = max(np.array(image).shape[0] for image in images)
@@ -56,30 +88,33 @@ if args.front.split(".")[-1].lower() == 'mp4':
     frontLayerImage = DynamicImage(args.front)
 else:
     frontLayerImage = StaticImage(args.front)
-if args.sound == None:
-    p = Popen(['ffmpeg', '-y', '-f', 'image2pipe', '-i', '-', '-vcodec', 'libx264', '-qscale', '5','-b','1000k', '-r', '120','-pix_fmt', 'yuv420p', args.output], stdin=PIPE)
-elif args.soundLoop:
-    p = Popen(['ffmpeg', '-y', '-f', 'image2pipe', '-i', '-','-stream_loop', '-1', '-i', args.sound, '-shortest', '-acodec', 'aac', '-vcodec', 'libx264', '-qscale', '5','-b','1000k', '-r', '30','-pix_fmt', 'yuv420p', args.output], stdin=PIPE)
-else:
-    p = Popen(['ffmpeg', '-y', '-f', 'image2pipe', '-i', '-','-stream_loop', '-1', '-i', args.sound,'-map', '0', '-map', '1', '-shortest','-acodec', 'aac', '-vcodec', 'libx264', '-qscale', '5','-b','1000k', '-r', '30','-pix_fmt', 'yuv420p', args.output], stdin=PIPE)
+temp_name = uuid.uuid1()
+p = Popen(['ffmpeg', '-y', '-f', 'image2pipe', '-i', '-', '-vcodec', 'libx264', '-qscale', '5','-b','1000k', '-r', '30','-pix_fmt', 'yuv420p', f'{temp_name}.mp4'], stdin=PIPE)
 average_width =  average_width if average_width % 2 == 0 else average_width - 1
+frames = []
 for i in range(width - average_width):
     bImage = backLayerImage.take_frame_by_frame()
+    fImage = frontLayerImage.take_frame_by_frame()
+    
     bImage = bImage.convert("RGBA")
 
     l = img[:, :(i % width)]
     r = img[:, (i % width):]
     
     img1 = np.hstack((r, l))
-      
     temp_img = Image.fromarray(img1[:, :average_width, :])
-    # temp_img.show()
     bImage = bImage.resize(temp_img.size)
     temp_img = Image.alpha_composite(bImage, temp_img)
-    fImage = frontLayerImage.take_frame_by_frame().convert("RGBA").resize(temp_img.size)
+    fImage = fImage.convert("RGBA").resize(temp_img.size)
     temp_img = Image.alpha_composite(temp_img, fImage)
     temp_img.save(p.stdin, 'PNG')
+    
+
 
 
 p.stdin.close()
 p.wait()
+
+output_time = len(image_url) * 5
+
+speed_up_video(f'{temp_name}.mp4', output_time, args.output)
