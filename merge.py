@@ -10,6 +10,17 @@ import io
 import ffmpeg
 import uuid
 
+def get_paths(directory):
+    # Lấy danh sách tất cả các files trong thư mục
+    files = os.listdir(directory)
+
+    # Sắp xếp danh sách files theo thứ tự số
+    sorted_files = sorted(files, key=lambda x: int(x.split('.')[0]))
+
+    # Tạo đường dẫn tuyệt đối cho từng file
+    paths = [os.path.join(directory, file) for file in sorted_files]
+    return paths
+
 def speed_up_video(input_video, output_duration, output):
     # Đọc thông số video gốc
     probe = ffmpeg.probe(input_video)
@@ -45,12 +56,14 @@ argParser.add_argument('-s', '--sound', help="Sound data", required=False, defau
 argParser.add_argument('-sl', '--soundLoop', help="Sound loop or not", required=False, default=False, type=bool)
 args = argParser.parse_args()
 
-image_url = []
-with open(args.images) as f:
-    for line in f:
-        image_url.append(line.split("\n")[0])
+# image_url = []
+# with open(args.images) as f:
+#     for line in f:
+#         image_url.append(line.split("\n")[0])
 
-images = [Image.open(io.BytesIO(requests.get(path).content)).convert("RGBA") for path in image_url]
+# images = [Image.open(io.BytesIO(requests.get(path).content)).convert("RGBA") for path in image_url]
+images_path = get_paths(args.images)
+images = [Image.open(path).convert('RGBA') for path in images_path]
 # print(os.environ['average_height'])
 max_width = sum(np.array(image).shape[1] for image in images)
 max_height = max(np.array(image).shape[0] for image in images)
@@ -89,7 +102,7 @@ if args.front.split(".")[-1].lower() == 'mp4':
 else:
     frontLayerImage = StaticImage(args.front)
 temp_name = uuid.uuid1()
-p = Popen(['ffmpeg', '-y', '-f', 'image2pipe', '-i', '-', '-vcodec', 'libx264', '-qscale', '5','-b','1000k', '-r', '30','-pix_fmt', 'yuv420p', f'{temp_name}.mp4'], stdin=PIPE)
+p = Popen(['ffmpeg', '-y', '-f', 'image2pipe', '-i', '-', '-qscale', '5', '-r', '30','-pix_fmt', 'yuv420p', f'{temp_name}.mp4'], stdin=PIPE)
 average_width =  average_width if average_width % 2 == 0 else average_width - 1
 frames = []
 for i in range(width - average_width):
@@ -115,6 +128,6 @@ for i in range(width - average_width):
 p.stdin.close()
 p.wait()
 
-output_time = len(image_url) * 5
+output_time = len(images_path) * 5
 
 speed_up_video(f'{temp_name}.mp4', output_time, args.output)
